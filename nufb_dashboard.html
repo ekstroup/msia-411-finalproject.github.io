@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<!-- Load d3.js -->
+<link href="https://fonts.googleapis.com/css?family=Alfa+Slab+One&display=swap" rel="stylesheet">
+<script src="https://d3js.org/d3.v4.js"></script>
+
+<style type="text/css">
+
+
+
+h1, h2, h3 {
+  font-family: Alfa Slab One, normal;
+  margin: 0px;
+  padding: 0px;
+  color: #4E2A84;
+}
+
+text {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    margin-top: 30px;
+    margin-bottom: 0px;
+    border: 0px;
+    padding: 0px;
+}
+
+.axis text {
+  font: 10px sans-serif;
+  text-transform: capitalize;  
+}
+
+.axis line {
+  stroke: #ccc;
+  stroke-dasharray: 2px 2px; 
+}
+
+.axis path {
+  stroke: #ccc;
+}
+
+#selectButton {
+	position: absolute;
+	left: 100px;
+	top: 70px;
+}
+
+</style>
+
+<body>
+  <div id=#titleDiv> 
+    <h1>Northwestern Football Dashboard</h1>
+  </div>
+
+<!-- Create a div where the graph will take place -->
+<div id="my_dataviz"></div>
+
+<!-- Initialize a select button -->
+<select name="Opponent" id="selectButton"></select>
+
+</body>
+
+
+<script>
+
+// set the dimensions and margins of the graph
+var margin = {top: 10, right: 100, bottom: 30, left: 30},
+    width = 1200 - margin.left - margin.right,
+    height = 1200 - margin.top - margin.bottom;
+
+// append the svg object to the body of the page
+var svg = d3.select("#my_dataviz")
+  .append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform",
+          "translate(" + margin.left + "," + margin.top + ")");
+
+// add label for drop-down menu
+svg.append("text")
+	.attr("x", 10 - margin.left)
+	.attr("y", 39 - margin.top)
+  .text("Opponent:")
+
+// BUILD SCOREBOARD
+build_scoreboard_background();
+
+// create container for excitement index plot
+var exciteHeight = 200,
+    exciteWidth = 200;
+
+var gExcitement = svg.append("g")
+  .attr("id", "group_excite")
+  .attr("class", "plot")
+  .attr("transform", "translate(30, 100)");
+
+// create container for win probability plot
+var winprobHeight = 200,
+    winprobWidth = 200;
+
+var gWinprob = svg.append("g")
+  .attr("id", "group_winprob")
+  .attr("class", "plot")
+  .attr("transform", "translate(300, 100)");
+
+// create container for the play by play plot
+var pbpHeight = 200,
+	pbpWidth = 450;
+
+var gPBP = svg.append("g")
+	.attr("id", "group_pbp")
+	.attr("class", "plot")
+	.attr("transform", "translate(30,450)");
+
+var oppGlobal = [];
+
+// GENERATE DASHBOARD /////////////////////////////////////////////////////////
+
+d3.csv("https://raw.githubusercontent.com/ekstroup/msia-411-data/master/gameinfo_Northwestern_regularSeason_2019.csv", function(game_data) {
+  d3.csv("https://raw.githubusercontent.com/ekstroup/msia-411-data/master/playinfo_Northwestern_regularSeason_2019_mod.csv", function(play_data) {
+
+  define_opponents(game_data);
+
+  var firstOpp = oppGlobal[0],
+      oppData = play_data.filter(function(d) { return d.defense == firstOpp; });
+
+  generate_scoreboard(game_data, firstOpp);
+  make_excitement_plot(game_data, firstOpp);
+  make_winprob_plot(game_data, firstOpp);
+
+  oppData.forEach(function(d) { process_pbp_data(d); });
+  make_pbp_plot(oppData);
+    
+  // A function that updates the entire dashboard
+  function update(newOpponent) {
+
+    remove_scoreboard();
+    generate_scoreboard(game_data, newOpponent);
+    update_highlighting(newOpponent);
+
+    var newPlayData = play_data.filter(function(d) { return d.defense == newOpponent; });
+    newPlayData.forEach(function(d) { process_pbp_data(d); });
+
+    remove_pbp_plot();
+    make_pbp_plot(newPlayData);
+  };
+
+  // When the button is changed, run the updateChart function
+  d3.select("#selectButton").on("change", function(d) {
+      // recover the option that has been chosen
+      var selectedOption = d3.select(this).property("value");
+      // run the updateChart function with this selected option
+      update(selectedOption);
+  });
+});});
+
+// UTILITY FUNCTIONS FOR PBP PLOT /////////////////////////////////////////////
+
+function build_scoreboard_background() {
+  // add background purple rectangle
+  svg.append("g").append("rect")
+    .attr("x", 200)
+    .attr("y", 10 - margin.top)
+    .attr("width", 1000 - margin.right)
+    .attr("height", 50)
+    .attr("fill", "#4E2A84");
+
+  // add text with Northwestern name (other team name added dynamically)
+  svg.append("text")
+    .attr("x", 220)
+    .attr("y", 43 - margin.top)
+    .text("NORTHWESTERN")
+    .style("fill", "white")
+    .style("font-size", "24px")
+
+  // add rectangles to create partitions in the scoreboard
+  svg.append("g").append("rect")
+    .attr("x", 600)
+    .attr("y", 9 - margin.top)
+    .attr("width", 100)
+    .attr("height", 52)
+    .attr("fill", "none")
+    .attr("stroke", "white")
+
+  svg.append("g").append("rect")
+    .attr("x", 525)
+    .attr("y", 9 - margin.top)
+    .attr("width", 250)
+    .attr("height", 52)
+    .attr("fill", "none")
+    .attr("stroke", "white")
+
+  // add text denoting the end of the game
+  svg.append("text")
+    .attr("x", 635)
+    .attr("y", 30 - margin.top)
+    .text("FINAL")
+    .style("fill", "white")
+    .style("font-size", "12px")
+
+  svg.append("text")
+    .attr("x", 630)
+    .attr("y", 48 - margin.top)
+    .text("0:00 4th")
+    .style("fill", "white")
+    .style("font-size", "12px")
+};
+
+function define_opponents(game_data) {
+
+    // add each opponent to a global-level array
+    var opponents = d3.map(game_data, function(d) { return d.opponent_team; }).keys();
+    opponents.forEach(function(i) { oppGlobal.push(i); });
+
+    // add the options to the button
+    d3.select("#selectButton")
+      .selectAll('myOptions')
+      .data(opponents)
+      .enter()
+      .append('option')
+      .text(function (d) { return d; }) // text showed in the menu
+      .attr("value", function (d) { return d; }) // corresponding value returned by the button
+};
+
+function generate_scoreboard(data, firstTeam) {
+
+  // initialize scoreboard with first game value
+  var gameArray = data.filter(function(d) { return d.opponent_team == firstTeam; }),
+      gameInfo = gameArray[0]
+      nu_score = gameInfo["team_points"].substring(0, gameInfo["team_points"].indexOf(".")),
+      opp_score = gameInfo["opponent_points"].substring(0, gameInfo["opponent_points"].indexOf("."));
+
+  svg.append("text")
+    .attr("id", "opponent_name")
+    .attr("x", 1180 - margin.right)
+    .attr("y", 43 - margin.top)
+    .attr("text-anchor", "end")
+    .text(firstTeam.toUpperCase())
+    .style("fill", "white")
+    .style("font-size", "24px")
+
+  svg.append("text")
+    .attr("id", "nu_score")
+    .attr("x", 555)
+    .attr("y", 47 - margin.top)
+    .attr("text_anchor", "middle")
+    .text(nu_score)
+    .style("fill", "white")
+    .style("font-size", "32px")
+
+  svg.append("text")
+    .attr("id", "opponent_score")
+    .attr("x", 720)
+    .attr("y", 47 - margin.top)
+    .attr("text_anchor", "middle")
+    .text(opp_score)
+    .style("fill", "white")
+    .style("font-size", "32px")
+};
+
+function remove_scoreboard() {
+  // remove old score and opponent name
+  d3.select("#opponent_name").remove();
+  d3.select("#opponent_score").remove();
+  d3.select("#nu_score").remove();
+};
+
+function make_excitement_plot(data, opponent) {
+
+  var excite_xScale = d3.scaleBand()
+      .domain(data.map(function(d) { return d.opponent_team; }))
+      .padding([0.1])
+      .rangeRound([0, exciteWidth]);
+
+    var excite_yScale = d3.scaleLinear()
+      .domain([0, d3.max(data, function(d) { return d.excitement_index; })])
+      .range([exciteHeight, 0]);
+
+    var excite_xAxis = d3.axisBottom(excite_xScale),
+        excite_yAxis = d3.axisLeft(excite_yScale)
+        .tickSize(-(exciteWidth));
+
+    var excite_xAxisGroup = gExcitement.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + exciteHeight + ")")
+      .call(excite_xAxis)
+      .selectAll("text")
+          .style("text-anchor", "end")
+          .attr("dx", -5).attr("dy", 5)
+          .attr("transform", "rotate(-45)");
+
+    var excite_yAxisGroup = gExcitement.append("g")
+      .attr("class", "y axis")
+      .call(excite_yAxis);
+
+    var exciteBars = gExcitement.selectAll(".bar")
+      .data(data)
+      .enter().append("rect")
+      .attr("class", "bar")
+      .attr("x", function(d) { return excite_xScale(d.opponent_team); })
+      .attr("y", function(d) { return excite_yScale(d.excitement_index); })
+      .attr("width", excite_xScale.bandwidth())
+      .attr("height", function(d) { return excite_yScale(0) - excite_yScale(d.excitement_index); })
+      .attr("fill", function(d) { 
+        if (d.opponent_team == opponent) { return "#4E2A84"; }
+        else { return "darkgrey"; }});
+
+    // Add x-axis label
+  gExcitement.append("text")
+      .attr("transform", "translate(" + (exciteWidth / 2) + " ," + (exciteHeight + 65) + ")")
+      .style("text-anchor", "middle")
+      .style("font-size", "14px")
+      .text("Opponent");
+
+  // Add y-axis label
+  gExcitement.append("text")
+      .attr("x", "100")
+      .attr("y", "-15")
+      .attr("text-anchor", "middle")
+      .style("font-size", "16px")
+      .text("Matchup Excitement Index");
+};
+
+function make_winprob_plot(data, opponent) {
+  var winprob_xScale = d3.scaleBand()
+      .domain(data.map(function(d) { return d.opponent_team; }))
+      .padding([0.1])
+      .rangeRound([0, winprobWidth]);
+
+    var winprob_yScale = d3.scaleLinear()
+      .domain([0, d3.max(data, function(d) { return d.team_win_prob; })])
+      .range([winprobHeight, 0])
+
+    var winprob_xAxis = d3.axisBottom(winprob_xScale),
+        winprob_yAxis = d3.axisLeft(winprob_yScale)
+        .tickSize(-(winprobWidth));
+
+    var winprob_xAxisGroup = gWinprob.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + winprobHeight + ")")
+      .call(winprob_xAxis)
+      .selectAll("text")
+          .style("text-anchor", "end")
+          .attr("dx", -5).attr("dy", 5)
+          .attr("transform", "rotate(-45)");
+
+    var winprob_yAxisGroup = gWinprob.append("g")
+      .attr("class", "y axis")
+      .call(winprob_yAxis);
+
+    // Add x-axis label
+  gWinprob.append("text")
+      .attr("transform","translate(" + (winprobWidth / 2) + " ," + (winprobHeight + 65) + ")")
+      .style("text-anchor", "middle")
+      // .style("fill", "grey")
+      .style("font-size", "14px")
+      .text("Opponent");
+
+  // Add y-axis label
+  gWinprob.append("text")
+      .attr("x", "100")
+      .attr("y", "-15")
+      .attr("text-anchor", "middle")
+      .style("font-size", "16px")
+      // .style("fill", "grey")
+      .text("Northwestern Win Probability");
+
+    var winprobBars = gWinprob.selectAll(".bar")
+      .data(data)
+      .enter().append("rect")
+      .attr("class", "bar")
+      .attr("x", function(d) { return winprob_xScale(d.opponent_team); })
+      .attr("y", function(d) { return winprob_yScale(d.team_win_prob); })
+      .attr("width", winprob_xScale.bandwidth())
+      .attr("height", function(d) { return winprob_yScale(0) - winprob_yScale(d.team_win_prob); })
+      .attr("fill", function(d) { 
+        if (d.opponent_team == opponent) { return "#4E2A84"; }
+        else { return "darkgrey"; }});
+};
+
+function update_highlighting(selectedGroup) {
+  // Give these new data to update line
+  svg.select("#group_excite").selectAll(".bar")
+    .attr("fill", function(d) { 
+      if (d.opponent_team == selectedGroup) { return "#4E2A84"; }
+      else { return "darkgrey"; }});
+
+  // Give these new data to update line
+  svg.select("#group_winprob").selectAll(".bar")
+    .attr("fill", function(d) { 
+      if (d.opponent_team == selectedGroup) { return "#4E2A84"; }
+      else { return "darkgrey"; }});
+};
+
+function process_pbp_data(d) { 
+      d.yards = +d.yards_gained,
+      d.yards_raw = +d.yards_gained_raw, //preserves zero for hover
+      //id: +d.id,
+      d.id = +d.id_by_quarter,
+      d.time = d['time'],
+      d.type = d['simple_play_type'],
+      d.type_full = d['play_type']
+};
+
+function make_pbp_plot(data) {
+
+  //Define xscale, yscale, xaxis, and yaxis here:
+  var pbp_xScale = d3.scaleBand().rangeRound([0, pbpWidth]);
+
+  var pbp_xAxisScale = d3.scaleLinear() //scale axis different from observations
+    .domain([1,4.9]).range([0, pbpWidth]);
+
+  var pbp_yScale = d3.scaleLinear().range([pbpHeight, 0]);
+
+  var pbp_xAxisTicks = pbp_xAxisScale.ticks()
+      .filter(Number.isInteger); //get rid of non-integer ticks, so only tick for first play of quarter
+
+  var pbp_xAxis = d3.axisBottom(pbp_xScale)
+      .scale(pbp_xAxisScale)
+      .tickValues(pbp_xAxisTicks)
+      .tickFormat(d3.format("d")) //format 'd' truncates to whole number
+      .tickSize(-pbpHeight);
+
+  var pbp_yAxis = d3.axisLeft(pbp_yScale)
+    .tickFormat(d3.format("d"))
+    .tickSize(-(pbpWidth));
+
+  //define scales manually instead of d3.extent so that min value is 0
+  pbp_yScale.domain([d3.min(data, function(d) {return d.yards}), d3.max(data, function(d) {return d.yards})]);
+  //xScale.domain(data.map(function(d) { return d.time; })); //for time 
+  pbp_xScale.domain(data.map(function(d) { return d.id; }));
+
+  var pbp_xAxisGroup = gPBP.append('g')
+    .attr('class', 'x axis')
+    .attr("id", "orig_x_axis")
+    .call(pbp_xAxis)
+    .attr("transform", "translate(0," + pbpHeight + ")")
+
+  var pbp_yAxisGroup = gPBP.append('g')
+    .attr('class', 'y axis')
+    .attr("id", "orig_y_axis")
+    .call(pbp_yAxis);
+
+  //horiz zero line
+  gPBP.append("g")
+      .attr("id", "horiz_line")
+      .attr("class", "x axis")
+      .append("line")
+      .attr("y1", pbp_yScale(0))
+      .attr("y2", pbp_yScale(0))
+      .style("stroke", "black")
+      .style("stroke-width", 1.2)
+      .style("stroke-dasharray", "5,0")
+      .attr("x2", pbpWidth);
+
+    // Add y-axis label
+  gPBP.append("text")
+      .attr("x", pbpWidth / 2)
+      .attr("y", "-25")
+      .attr("text-anchor", "middle")
+      .style("font-size", "16px")
+      // .style("fill", "grey")
+      .text("Net Offensive Yards by Play");
+
+  // Create bars here:
+    gPBP.selectAll(".bar") 
+    .data(data) 
+    .enter().append("rect")
+    .attr("class", function(d) {
+      if (d.yards < 0) {
+        return "bar negative";
+      } else {
+        return "bar positive";
+      }
+    })
+    .attr("x", function(d) { return pbp_xScale(d.id); }) 
+    .attr("y", function(d) {
+      if (d.yards > 0) {
+        return pbp_yScale(d.yards);
+      } else {
+        return pbp_yScale(0);
+      }
+      })
+    .attr("width", pbp_xScale.bandwidth()) 
+    .attr("height", function(d) {
+          return Math.abs(pbp_yScale(d.yards) - pbp_yScale(0));
+      })
+    .style("fill", function(d) {
+      if (d.type == 1) { //pass
+        return "#4E2A84";
+      } else if (d.type == 2) {
+        return "darkgrey"; //rush
+      }
+      })
+      .on("mouseover", function(d){
+            // alert("Year: " + d.Year + ": " + d.Celsius + " Celsius");
+            d3.select("#_yards")
+                .text("Yards gained: " + d.yards_raw);
+            d3.select("#_type")
+                .text("Detailed play type: " + d.type_full);
+        });
+
+  //make legend
+  gPBP.append("text").attr("x", pbpWidth + 10).attr("y", 50).text("Play Type").style("font-size", "14px").attr("alignment-baseline","middle").style("fill", "black")
+  gPBP.append("circle").attr("cx", pbpWidth + 15).attr("cy",70).attr("r", 4).style("fill", "#4E2A84")
+  gPBP.append("text").attr("x", pbpWidth + 25).attr("y", 70).text("Passing").style("font-size", "12px").attr("alignment-baseline","middle").style("fill", "black")
+  gPBP.append("circle").attr("cx",pbpWidth + 15).attr("cy",85).attr("r", 4).style("fill", "darkgrey")
+  gPBP.append("text").attr("x", pbpWidth + 25).attr("y", 85).text("Rushing").style("font-size", "12px").attr("alignment-baseline","middle").style("fill", "black")
+  
+  gPBP.append("text").attr("x", 2).attr("y", -10).text("Net Gain by Play (yards)").style("font-size", "12px").attr("alignment-baseline","middle").style("fill", "black")
+  gPBP.append("text").attr("x", -2).attr("y", 225).text("Quarter").style("font-size", "12px").attr("alignment-baseline","middle").style("fill", "black")
+
+  //append mouseover stuff defined above
+  gPBP.append("g")
+      .attr("class", "infowin")
+      .attr("transform", "translate(155, -10)")
+      .append("text")
+      .style("font-size", "12px").attr("alignment-baseline","middle").style("fill", "black")
+      .attr("id", "_yards");
+
+  gPBP.append("g")
+      .attr("class", "infowin")
+      .attr("transform", "translate(260, -10)")
+      .append("text")
+      .style("font-size", "12px").attr("alignment-baseline","middle").style("fill", "black")
+      .attr("id","_type");
+};
+
+function remove_pbp_plot() {
+
+  // remove previous bars
+  gPBP.selectAll(".bar").remove();
+  gPBP.select("#horiz_line").remove();
+  gPBP.select("#orig_x_axis").remove();
+  gPBP.select("#orig_y_axis").remove();
+};
+
+</script>
