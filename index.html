@@ -113,6 +113,15 @@ var gPBP = svg.append("g")
 	.attr("class", "plot")
 	.attr("transform", "translate(30,450)");
 
+// create container for the football field plot
+var fieldHeight = 560,
+	fieldWidth = 350;
+
+var gField = svg.append("g")
+	.attr("id", "group_field")
+	.attr("class", "plot")
+	.attr("transform", "translate(575,100)");
+
 var oppGlobal = [];
 
 // GENERATE DASHBOARD /////////////////////////////////////////////////////////
@@ -131,6 +140,8 @@ d3.csv("https://raw.githubusercontent.com/ekstroup/msia-411-data/master/gameinfo
 
   oppData.forEach(function(d) { process_pbp_data(d); });
   make_pbp_plot(oppData);
+
+  make_football_field();
     
   // A function that updates the entire dashboard
   function update(newOpponent) {
@@ -535,5 +546,87 @@ function remove_pbp_plot() {
   gPBP.select("#orig_x_axis").remove();
   gPBP.select("#orig_y_axis").remove();
 };
+
+function make_football_field() {
+	var fieldPadding = 20
+	var interzone_padding = 2.5
+	var zone_width = fieldWidth - 40
+	var zone_height = (fieldHeight - (10 * interzone_padding)) / 10
+
+	var regions = [0, 10, 20, 30, 40, 50, 40, 30, 20, 10, 0];
+	var zones = [10, 20, 30, 40, 50, 40, 30, 20, 10];
+
+	// create basic gridiron field
+
+	gField.selectAll('rect')
+	.data(regions)
+	.enter()
+	.append('rect')
+	.attr('x', fieldPadding)
+	.attr('y', function (d,i) {
+		if (i == 0) { return  0; }
+		else if (i == 10) { return fieldHeight - (zone_height / 2); }
+		else { return (i - 0.5)*zone_height + i*interzone_padding; }
+	})
+	.attr('width', zone_width)
+	.attr('height', function (d,i) {
+		if (i == 0) { return  zone_height/2 - interzone_padding; }
+		else if (i == 10) { return zone_height / 2; }
+		else { return zone_height - interzone_padding; }
+	})
+	.attr('fill', function (d,i) {
+		if (i == 0) { return  "#4E2A84"; }
+		else if (i == 10) { return "darkgrey"; }
+		else { return "green"; }
+	});
+
+	//add the numbering text on each gridzone - left side first
+	gField.selectAll('text')
+		.data(zones)
+		.enter()
+		.append('text')
+		.attr('class', 'left-grid-text')
+		.attr('x', 1.5 * fieldPadding)
+		.attr('y', function (d,i) {
+			return ((i+0.5)*(zone_height + interzone_padding)) + 32; })
+		.text(function (d) { return d; })
+		.attr('fill', 'white');
+
+	// add the numbering text on each gridzone - right side now using for loop
+	for (var i = 0; i < zones.length; i++) {
+		gField.append('text')
+		.attr('x', fieldWidth - 2.5 * fieldPadding)
+		.attr('y', (i+0.5)*(zone_height + interzone_padding) + 32)
+		.text(zones[i])
+		.attr('fill', 'white');
+	}
+
+	// annotate the endzones
+	gField.append('text')
+		.attr('x', fieldWidth/2)
+		.attr('y', 18)
+		.text('NORTHWESTERN')
+		.attr('fill', "white")
+		.attr("text-anchor", "middle")
+		.style("font-weight", 100)
+		.style("font-family", "Alfa Slab One, normal");
+
+	gField.append('text')
+		.attr('x', fieldWidth/2)
+		.attr('y', fieldHeight - 7)
+		.text('OPPONENT')
+		.attr('fill', "white")
+		.attr("text-anchor", "middle")
+		.style("font-weight", 100)
+		.style("font-family", "Alfa Slab One, normal");
+
+    // Add y-axis label
+  	gField.append("text")
+		.attr("x", fieldWidth / 2)
+		.attr("y", "-15")
+		.attr("text-anchor", "middle")
+		.style("font-size", "16px")
+		.text("Offensive Performance by Field Position");
+}
 
 </script>
