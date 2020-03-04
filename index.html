@@ -568,6 +568,7 @@ function make_football_field() {
 		else if (i == 10) { return fieldHeight - (zone_height / 2); }
 		else { return (i - 0.5)*zone_height + i*interzone_padding; }
 	})
+  .attr('id', function( d,i) {return 'region'+i})
 	.attr('width', zone_width)
 	.attr('height', function (d,i) {
 		if (i == 0) { return  zone_height/2 - interzone_padding; }
@@ -578,7 +579,18 @@ function make_football_field() {
 		if (i == 0) { return  "#4E2A84"; }
 		else if (i == 10) { return "darkgrey"; }
 		else { return "green"; }
-	});
+	})
+  .on("mouseover", function(d, i){ 
+    if (i != 0 & i!=10) { d3.select(this).attr('fill', 'chartreuse')}
+            // alert("Year: " + d.Year + ": " + d.Celsius + " Celsius");
+            //d3.select("#_yards")
+               // .text("Yards gained: " + d.yards_raw);
+            //d3.select("#_type")
+                //.text("Detailed play type: " + d.type_full);
+        })
+  .on("mouseout", function(d,i) {
+    if (i != 0 & i!=10) {d3.select(this).attr('fill', 'green')}
+  });
 
 	//add the numbering text on each gridzone - left side first
 	gField.selectAll('text')
@@ -627,6 +639,32 @@ function make_football_field() {
 		.attr("text-anchor", "middle")
 		.style("font-size", "16px")
 		.text("Offensive Performance by Field Position");
+
+  // Add field statistic labels
+  gField.append("text")
+    .attr("x", fieldWidth)
+    .attr("y", (1/2*(zone_height + interzone_padding)) + 15)
+    .style("font-size", "14px")
+    .text("Average Yards Gained:");
+
+  gField.append("text")
+    .attr("x", fieldWidth)
+    .attr("y", (3/2*(zone_height + interzone_padding)) + 15)
+    .style("font-size", "14px")
+    .text("Complete Passes (%):");
+
+  gField.append("text")
+    .attr("x", fieldWidth)
+    .attr("y", (5/2*(zone_height + interzone_padding)) + 15)
+    .style("font-size", "14px")
+    .text("Most Frequent Rusher:");
+
+  gField.append("text")
+    .attr("x", fieldWidth)
+    .attr("y", (7/2*(zone_height + interzone_padding)) + 15)
+    .style("font-size", "14px")
+    .text("Most Frequent Receiver:");
+
 }
 
 </script>
