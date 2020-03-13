@@ -7,8 +7,6 @@
 
 <style type="text/css">
 
-
-
 h1, h2, h3 {
   font-family: Alfa Slab One, normal;
   margin: 0px;
@@ -57,9 +55,7 @@ text {
 
 <!-- Initialize a select button -->
 <select name="Opponent" id="selectButton"></select>
-
 </body>
-
 
 <script>
 
@@ -125,46 +121,61 @@ var gField = svg.append("g")
 var oppGlobal = [];
 
 // GENERATE DASHBOARD /////////////////////////////////////////////////////////
+// GENERATE DASHBOARD /////////////////////////////////////////////////////////
 
 d3.csv("https://raw.githubusercontent.com/ekstroup/msia-411-data/master/gameinfo_Northwestern_regularSeason_2019.csv", function(game_data) {
   d3.csv("https://raw.githubusercontent.com/ekstroup/msia-411-data/master/playinfo_Northwestern_regularSeason_2019_mod.csv", function(play_data) {
+    d3.csv("https://raw.githubusercontent.com/ekstroup/msia-411-project/master/fieldmetrics_gameandregion.csv?token=ALXQTUZPMBFVXBAHM273L326OLBUU", function(field_data) {
+    define_opponents(game_data);
 
-  define_opponents(game_data);
-
-  var firstOpp = oppGlobal[0],
-      oppData = play_data.filter(function(d) { return d.defense == firstOpp; });
-
-  generate_scoreboard(game_data, firstOpp);
-  make_excitement_plot(game_data, firstOpp);
-  make_winprob_plot(game_data, firstOpp);
-
-  oppData.forEach(function(d) { process_pbp_data(d); });
-  make_pbp_plot(oppData);
-
-  make_football_field();
+    var firstOpp = oppGlobal[0],
+        oppData = play_data.filter(function(d) { return d.defense == firstOpp; });
     
-  // A function that updates the entire dashboard
-  function update(newOpponent) {
+    var oppData2 = field_data.filter(function(d) { return d.defense == firstOpp; });
 
-    remove_scoreboard();
-    generate_scoreboard(game_data, newOpponent);
-    update_highlighting(newOpponent);
+    generate_scoreboard(game_data, firstOpp);
+    make_excitement_plot(game_data, firstOpp);
+    make_winprob_plot(game_data, firstOpp);
+   
 
-    var newPlayData = play_data.filter(function(d) { return d.defense == newOpponent; });
-    newPlayData.forEach(function(d) { process_pbp_data(d); });
+    oppData.forEach(function(d) { process_pbp_data(d); });
+    oppData2.forEach(function(d) { process_field_data(d); });
 
-    remove_pbp_plot();
-    make_pbp_plot(newPlayData);
-  };
+    make_pbp_plot(oppData);
+    make_football_field(oppData2);
+   
+    // A function that updates the entire dashboard
+    function update(newOpponent) {
 
-  // When the button is changed, run the updateChart function
-  d3.select("#selectButton").on("change", function(d) {
-      // recover the option that has been chosen
-      var selectedOption = d3.select(this).property("value");
-      // run the updateChart function with this selected option
-      update(selectedOption);
+      remove_scoreboard();
+      generate_scoreboard(game_data, newOpponent);
+      update_highlighting(newOpponent);
+      make_football_field(field_data, newOpponent);
+
+      var newPlayData = play_data.filter(function(d) { return d.defense == newOpponent; });
+      newPlayData.forEach(function(d) { process_pbp_data(d); });
+
+      var newFieldData = field_data.filter(function(d) { return d.defense == newOpponent; });
+      newFieldData.forEach(function(d) { process_field_data(d); });
+
+      remove_pbp_plot();
+      remove_field_plot()
+      make_pbp_plot(newPlayData);
+      make_football_field(newFieldData);
+      
+    };
+
+
+    // When the button is changed, run the updateChart function
+    d3.select("#selectButton").on("change", function(d) {
+        // recover the option that has been chosen
+        var selectedOption = d3.select(this).property("value");
+        // run the updateChart function with this selected option
+        update(selectedOption);
   });
-});});
+  });});
+});
+
 
 // UTILITY FUNCTIONS FOR PBP PLOT /////////////////////////////////////////////
 
@@ -414,6 +425,13 @@ function process_pbp_data(d) {
       d.type_full = d['play_type']
 };
 
+function process_field_data(d) { 
+      d.avg = +d['avg_yards_gained'],
+      d.pass = d['perc_complete'],
+      d.rusher = d['most_frequent_rusher'],
+      d.receiver = d['most_frequent_receiver']
+};
+
 function make_pbp_plot(data) {
 
   //Define xscale, yscale, xaxis, and yaxis here:
@@ -547,70 +565,177 @@ function remove_pbp_plot() {
   gPBP.select("#orig_y_axis").remove();
 };
 
-function make_football_field() {
+function remove_field_plot() {
+  // remove previous field    
+  gField.selectAll("rect").remove();
+};
+
+function make_football_field(data) {
+
 	var fieldPadding = 20
-	var interzone_padding = 2.5
+	var interzone_padding = 1.5
 	var zone_width = fieldWidth - 40
-	var zone_height = (fieldHeight - (10 * interzone_padding)) / 10
+	var zone_height = (fieldHeight - (11 * interzone_padding)) / 11
+	var zones = ["1  0", "2  0", "3  0", "4  0", "5  0", "4  0", "3  0", "2  0", "1  0"];
+	var endzones = [0, 1];
+   
+	// start with a div where the value will go
+	var div = d3.select("#_stats").append("div")
+     .attr("class", "tooltip")
+     .style("opacity", 0);
 
-	var regions = [0, 10, 20, 30, 40, 50, 40, 30, 20, 10, 0];
-	var zones = [10, 20, 30, 40, 50, 40, 30, 20, 10];
+     // create endzones
+     gField.selectAll('rect')
+     	.data(endzones)
+     	.enter()
+     	.append('rect')
+     	.attr('x', fieldPadding)
+     	.attr('y', function(d,i) {
+     		if (i == 0) { return 0; }
+     		else { return fieldHeight - (zone_height / 2); }
+     	})
+     	.attr('width', zone_width)
+     	.attr('height', function(d,i) {
+     		if (i == 0) { return zone_height / 2 - interzone_padding; }
+     		else { return zone_height / 2; }
+     	})
+     	.attr('fill', function(d,i) {
+     		if (i == 0) { return '#4E2A84'; }
+     		else { return "darkgrey"; }
+     	})
 
-	// create basic gridiron field
-
-	gField.selectAll('rect')
-	.data(regions)
+  // create basic gridiron field
+	gField.selectAll('bar')
+	.data(data)
 	.enter()
 	.append('rect')
 	.attr('x', fieldPadding)
 	.attr('y', function (d,i) {
-		if (i == 0) { return  0; }
-		else if (i == 10) { return fieldHeight - (zone_height / 2); }
-		else { return (i - 0.5)*zone_height + i*interzone_padding; }
+		return (i + 0.5)*zone_height + (i+1)*interzone_padding;
 	})
-  .attr('id', function( d,i) {return 'region'+i})
 	.attr('width', zone_width)
-	.attr('height', function (d,i) {
-		if (i == 0) { return  zone_height/2 - interzone_padding; }
-		else if (i == 10) { return zone_height / 2; }
-		else { return zone_height - interzone_padding; }
-	})
-	.attr('fill', function (d,i) {
-		if (i == 0) { return  "#4E2A84"; }
-		else if (i == 10) { return "darkgrey"; }
-		else { return "green"; }
-	})
-  .on("mouseover", function(d, i){ 
-    if (i != 0 & i!=10) { d3.select(this).attr('fill', 'chartreuse')}
-            // alert("Year: " + d.Year + ": " + d.Celsius + " Celsius");
-            //d3.select("#_yards")
-               // .text("Yards gained: " + d.yards_raw);
-            //d3.select("#_type")
-                //.text("Detailed play type: " + d.type_full);
-        })
-  .on("mouseout", function(d,i) {
-    if (i != 0 & i!=10) {d3.select(this).attr('fill', 'green')}
-  });
+	.attr('height', zone_height - interzone_padding)
+	.attr('fill', "green")
+   // mouse over
+   .on('mouseover', function (d, i) {
+          d3.select(this).transition()
+               .duration('50')
+               .attr('opacity', '.6');
+          // Makes the new div appear on hover
+          div.transition()
+               .duration(50)
+               .style("opacity", 1);
+          d3.select("#_avg1")
+                .text("Average Yards Gained: ")
+          d3.select("#_avg2")
+                .text(d.avg)
+          d3.select("#_complete1")
+                .text("Complete Passes (%): ")
+          d3.select("#_complete2")
+                .text(d.pass)
+          d3.select("#_rusher1")
+                .text("Most Frequent Rusher: ")
+          d3.select("#_rusher2")
+                .text(d.rusher)
+          d3.select("#_receiver1")
+                .text("Most Frequent Receiver: ");
+          d3.select("#_receiver2")
+                .text(d.receiver);      
+   })
+   .on('mouseout', function (d, i) {
+          d3.select(this).transition()
+               .duration('50')
+               .attr('opacity', '1');
+          //Makes the new div disappear:
+          div.transition()
+               .duration('50')
+               .style("opacity", 0);
+    })
 
-	//add the numbering text on each gridzone - left side first
-	gField.selectAll('text')
-		.data(zones)
-		.enter()
-		.append('text')
-		.attr('class', 'left-grid-text')
-		.attr('x', 1.5 * fieldPadding)
-		.attr('y', function (d,i) {
-			return ((i+0.5)*(zone_height + interzone_padding)) + 32; })
-		.text(function (d) { return d; })
-		.attr('fill', 'white');
+ //append mouseover stuff defined above
+  gField.append("g")
+      .attr("class", "stat")
+      .attr("transform", "translate(340, 40)")
+      .append("text")
+      .style("font-size", "14px").attr("alignment-baseline","middle").style("fill", "black")
+      .attr("id", "_avg1"); 
+
+  gField.append("g")
+      .attr("class", "stat")
+      .attr("transform", "translate(340, 55)")
+      .append("text")
+      .style("font-size", "14px").attr("alignment-baseline","middle").style("fill", "black")
+      .style('font-weight', '700')
+      .attr("id", "_avg2"); 
+      
+  gField.append("g")
+      .attr("class", "stat")
+      .attr("transform", "translate(340, 75)")
+      .append("text")
+      .style("font-size", "14px").attr("alignment-baseline","middle").style("fill", "black")
+      .attr("id","_complete1");
+
+  gField.append("g")
+      .attr("class", "stat")
+      .attr("transform", "translate(340, 90)")
+      .append("text")
+      .style("font-size", "14px").attr("alignment-baseline","middle").style("fill", "black")
+      .style('font-weight', '700')
+      .attr("id","_complete2");
+
+  gField.append("g")
+      .attr("class", "stat")
+      .attr("transform", "translate(340, 130)")
+      .append("text")
+      .style("font-size", "14px").attr("alignment-baseline","middle").style("fill", "black")
+      .attr("id","_rusher1");
+
+ gField.append("g")
+      .attr("class", "stat")
+      .attr("transform", "translate(340, 145)")
+      .append("text")
+      .style("font-size", "14px").attr("alignment-baseline","middle").style("fill", "black")
+      .style('font-weight', '700')
+      .attr("id","_rusher2");
+
+  gField.append("g")
+      .attr("class", "stat")
+      .attr("transform", "translate(340, 175)")
+      .append("text")
+      .style("font-size", "14px").attr("alignment-baseline","middle").style("fill", "black")
+      .attr("id","_receiver1");
+    
+  gField.append("g")
+      .attr("class", "stat")
+      .attr("transform", "translate(340, 190)")
+      .append("text")
+      .style("font-size", "14px").attr("alignment-baseline","middle").style("fill", "black")
+      .style('font-weight', '700')
+      .attr("id","_receiver2");
+	
+	
+  //add the numbering text on each gridzone - left side first
+  for (var i = 0; i < zones.length; i++) {
+		gField.append('text')
+		.attr('y', -30)
+		.attr('x', (i+0.5)*(zone_height + interzone_padding) + 38)
+		.text(zones[i])
+		.attr('transform', 'rotate(90)')
+		.attr('fill', 'white')
+		.style('font-family', 'Alfa Slab One, normal')
+		.style('font-size', '16px');
+	}
 
 	// add the numbering text on each gridzone - right side now using for loop
 	for (var i = 0; i < zones.length; i++) {
 		gField.append('text')
-		.attr('x', fieldWidth - 2.5 * fieldPadding)
-		.attr('y', (i+0.5)*(zone_height + interzone_padding) + 32)
+		.attr('y', fieldWidth - 1.5 * fieldPadding)
+		.attr('x', -(i+0.5)*(zone_height + interzone_padding) - 62)
+		.attr('transform', 'rotate(-90)')
 		.text(zones[i])
-		.attr('fill', 'white');
+		.attr('fill', 'white')
+		.style('font-family', 'Alfa Slab One, normal')
+		.style('font-size', '16px');
 	}
 
 	// annotate the endzones
@@ -639,32 +764,6 @@ function make_football_field() {
 		.attr("text-anchor", "middle")
 		.style("font-size", "16px")
 		.text("Offensive Performance by Field Position");
-
-  // Add field statistic labels
-  gField.append("text")
-    .attr("x", fieldWidth)
-    .attr("y", (1/2*(zone_height + interzone_padding)) + 15)
-    .style("font-size", "14px")
-    .text("Average Yards Gained:");
-
-  gField.append("text")
-    .attr("x", fieldWidth)
-    .attr("y", (3/2*(zone_height + interzone_padding)) + 15)
-    .style("font-size", "14px")
-    .text("Complete Passes (%):");
-
-  gField.append("text")
-    .attr("x", fieldWidth)
-    .attr("y", (5/2*(zone_height + interzone_padding)) + 15)
-    .style("font-size", "14px")
-    .text("Most Frequent Rusher:");
-
-  gField.append("text")
-    .attr("x", fieldWidth)
-    .attr("y", (7/2*(zone_height + interzone_padding)) + 15)
-    .style("font-size", "14px")
-    .text("Most Frequent Receiver:");
-
 }
 
 </script>
